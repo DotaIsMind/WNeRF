@@ -28,22 +28,24 @@ def rot_theta(th):
     ], dtype=np.float32)
 
 
-def generate_video_nearby(net, ref_dataset, bound, N_samples, device, v_path, r=5.0):
+def generate_video_nearby(net, ref_dataset, bound, N_samples, device, eval_path, r=5.0):
     f = ref_dataset.f
     img_size = ref_dataset.img_size
     c2w = ref_dataset.c2w[0]
     frames = list()
-    for th in tqdm(np.linspace(-1.0, 1.0, 120, endpoint=False)):
+    img_path = eval_path + "rgb/"
+    os.makedirs(img_path, exist_ok=True)
+    img_idx = 0
+    for th in tqdm(np.linspace(-1.0, 1.0, 30, endpoint=False)):
         theta = rot_theta(r * np.sin(np.pi * 2.0 * th) / 180.0 * np.pi)
         phi = rot_phi(r * np.cos(np.pi * 2.0 * th) / 180.0 * np.pi)
         rgb = generate_frame(net, theta @ phi @ c2w, f, img_size, bound, N_samples, device, ref_dataset)
-        frames.append((255 * np.clip(rgb.cpu().numpy(), 0, 1)).astype(np.uint8))
+        rgb = (255 * np.clip(rgb.cpu().numpy(), 0, 1)).astype(np.uint8)
+        imageio.imwrite(f'{img_path}{img_idx:03d}.png', rgb)
+        frames.append(rgb)
+        img_idx += 1
 
-    # if os.path.exists("./runs/video/"):
-    #     imageio.mimwrite(v_path, frames, fps=30, quality=7)
-    # else:
-    #     os.mkdir("./runs/video/")
-    imageio.mimwrite(v_path, frames, fps=30, quality=7)
+    imageio.mimwrite(eval_path+time.strftime("%Y-%m-%d %H-%M-%S", time.localtime())+".mp4", frames, fps=30, quality=7)
 
 
 @torch.no_grad()

@@ -34,7 +34,7 @@ class ResMLP(nn.Module):
 
 
 class PixelNeRF(nn.Module):
-    def __init__(self, img_f_ch):
+    def __init__(self, img_f_ch, net_width):
         super(PixelNeRF, self).__init__()
         # supp.B1.
         # w\  position encoding
@@ -50,7 +50,7 @@ class PixelNeRF(nn.Module):
         # Set up PixelNeRF in supp.Fig.8
         # net_width = 512
         # COOM error to 256
-        net_width = 512
+        # net_width = 512
         ## (L(x),d) -> f
         self.mlp = nn.Sequential(
                 nn.Linear(self.xd_input_ch, net_width),

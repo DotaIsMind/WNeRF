@@ -25,12 +25,14 @@ def get_dataset(data_dir, n, device):
     images = data['images']
     poses = data['poses']
     focal = data['focal']
-    # 打乱光线排列
-    train_list = shuffle_id(images.shape[0], n)
+    # shuffle images idx
+    train_list, eval_list = shuffle_id(images.shape[0], n)
     H, W = images.shape[1:3]
-    rays = create_ray_batches(images, poses, train_list, H, W, focal, device)
+    train_rays = create_ray_batches(images, poses, train_list, H, W, focal, device)
+    eval_rays = create_ray_batches(images, poses, eval_list, H, W, focal, device)
 
     train_images = torch.tensor(images[train_list], device=device).permute(0, 3, 1, 2)
+    eval_images = torch.tensor(images[eval_list], device=device).permute(0, 3, 1, 2)
     # encoder = ImageEncoder().to(device).eval()
     # with torch.no_grad():
     #     reference_feature = encoder(train_images)
@@ -38,17 +40,21 @@ def get_dataset(data_dir, n, device):
 
     encoder = MWCNN().to(device).eval()
     with torch.no_grad():
-        reference_feature = encoder(train_images)
-    #     # reference_feature => tensor(n, 128, 50, 50)
+        train_reference_feature = encoder(train_images)
+        eval_reference_feature = encoder(eval_images)
+        # reference_feature => tensor(n, 128, 50, 50)
 
-    return RaysDataset(rays), ReferenceDataset(reference_feature, poses[train_list], focal, H)
+    return RaysDataset(train_rays), ReferenceDataset(train_reference_feature, poses[train_list], focal, H), \
+           RaysDataset(eval_rays), ReferenceDataset(eval_reference_feature, poses[eval_list], focal, H)
 
 
 def shuffle_id(n, k):
-    train_list = np.arange(n)
-    np.random.shuffle(train_list)
-    train_list = train_list[:k]
-    return train_list
+    data_list = np.arange(n)
+    np.random.shuffle(data_list)
+    train_list = data_list[:k]
+    eval_list = data_list[k:15]
+    # eval_list = data_list[k:k+5]
+    return train_list, eval_list
 
 
 def create_ray_batches(images, poses, train_list, H, W, f, device):

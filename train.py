@@ -60,63 +60,56 @@ def train(args):
     # create rays for batch train
     #############################
     logger.info("Process rays data for training!")
-    rays_dataset, ref_dataset = get_dataset("./drive/MyDrive/PixelNeRF/data/tiny_nerf_data.npz", n_train, device)
+    train_rays_dataset, train_ref_dataset, eval_rays_dataset, eval_ref_dataset = get_dataset("./data/tiny_nerf_data.npz", n_train, device)
 
     #############################
     # training parameters
     #############################
     bound = (2., 6.)
     N_samples = (64, None)
-    # epoch = 50
-    # img_f_ch = 512
-    # img_f_ch = 256
-    # lr = 1e-4
-    # default Batch_size = 1024
-    rays_loader = DataLoader(rays_dataset, batch_size=args.bs, drop_last=True, shuffle=True)
+
+    train_rays_loader = DataLoader(train_rays_dataset, batch_size=args.bs, drop_last=True, shuffle=True)
+    eval_rays_loader = DataLoader(eval_rays_dataset, batch_size=args.bs, drop_last=True, shuffle=True)
     logger.info("Batch size of rays: {}, epoch: {}, img feature channel: {}, lr: {}, lr decay rate: {}".format(
         args.bs, args.epochs, args.img_fea_ch, args.lr, args.lr_decay_rate))
 
     #############################
     # training
     #############################
-    runpath = "./runs/"
-    scene_path = "./runs/" + args.scene + "/"
-    vidpath = "./runs/" + args.scene + "/video/"
-    if os.path.exists(runpath) is False: os.mkdir(runpath)
-    if os.path.exists(runpath) is False: os.makedirs(scene_path)
-    if os.path.exists(vidpath) is False: os.makedirs(vidpath)
+    run_path = "./runs/"
+    scene_path = run_path + args.scene + "/"
+    train_path = scene_path + "train/"
+    eval_path = scene_path + "eval/"
+    os.makedirs(train_path, exist_ok=True)
+    os.makedirs(eval_path, exist_ok=True)
 
-    net = PixelNeRF(args.img_fea_ch).to(device)
+    net = PixelNeRF(args.img_fea_ch, args.hidden).to(device)
     mse = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     writer = SummaryWriter(log_dir=scene_path)
 
     # ---- load pre ckp -----
     start_epoch = 0
-    # ckpt = runpath + args.model_dir + "/ckpt.pt"
-    if args.model_dir != "":
+    if args.model_dir != "" and not args.eval:
         if os.path.exists(args.model_dir):
             start_epoch = loadFromCheckpoint(args.model_dir, net, optimizer)
         else:
             raise ValueError("Model ckp path not exist")
 
-    # elif args.pretrained != "":
-    #     start_epoch = loadFromCheckpoint(runpath + args.pretrained + "/ckpt.pt", net, optimizer)
-
     # -- write train params to file --
-    with open(scene_path + args.scene+".json", 'w') as f:
+    with open(scene_path + args.scene+"_conf.json", 'w') as f:
         json.dump(args.__dict__, f, indent=2)
     f.close()
 
     logger.info("Start Training!")
-    for e in range(start_epoch, args.epochs+1):
+    for e in range(start_epoch, args.epochs):
         # epoch_loss_total = 0
-        with tqdm(total=len(rays_loader), desc=f"Epoch {e+1}", ncols=100) as p_bar:
-            for train_rays in rays_loader:
+        with tqdm(total=len(train_rays_loader), desc=f"Epoch {e+1}", ncols=100) as p_bar:
+            for train_rays in train_rays_loader:
                 assert train_rays.shape == (args.bs, 9)
                 rays_o, rays_d, target_rgb = torch.chunk(train_rays, 3, dim=-1)
                 rays_od = (rays_o, rays_d)
-                rgb, _, __ = render_rays(net, rays_od, bound=bound, N_samples=N_samples, device=device, ref=ref_dataset)
+                rgb, _, __ = render_rays(net, rays_od, bound=bound, N_samples=N_samples, device=device, ref=train_ref_dataset)
                 loss = mse(rgb, target_rgb)
                 psnr = mse2psnr(loss)
                 optimizer.zero_grad()
@@ -129,19 +122,40 @@ def train(args):
         writer.add_scalar('loss/train', loss.item(), e)
         writer.add_scalar('psnr/train', psnr.item(), e)
 
-        # if e+1 % args.save_ckp == 0 or e == args.epochs -1:
-        #     if np.isnan(loss.item()):
-        #         logger.warning("Save ckp but loss is nan, exit")
-        #         exit()
-        #     checkpoint(scene_path + args.scene + "_ckpt.pt", net, optimizer, e + 1)
+        if (e != 0 and e % args.save_ckp == 0) or e == args.epochs-1:
+            if np.isnan(loss.item()):
+                logger.warning("Save ckp but loss is nan, exit")
+                exit()
+            checkpoint(scene_path + args.scene + str(e) + "_ckpt.pt", net, optimizer, e)
 
     logger.info('Finish Training!')
     writer.close()
 
-    logger.info('Start Generating Video!')
+    # -- Eval --
+    logger.info('Start Eval!')
     net.eval()
+    loss_total = 0
+    psnr_total = 0
+    # todo: psnr, ssim, lpips = eval(eval_rays_loader, eval_ref_dataset, bound, N_sample, device, path, args_render_viewing)
+    torch.cuda.empty_cache()
+    with torch.no_grad():
+        for eval_rays in eval_rays_loader:
+            assert eval_rays.shape == (args.bs, 9)
+            # chunk 在给定维度上将Tensor分块
+            rays_o, rays_d, target_rgb = torch.chunk(eval_rays, 3, dim=-1)
+            rays_od = (rays_o, rays_d)
+            rgb, _, __ = render_rays(net, rays_od, bound=bound, N_samples=N_samples, device=device, ref=eval_ref_dataset)
+            loss_total += mse(rgb, target_rgb).item()
+            psnr_total += mse2psnr(loss).item()
+
+    eval_rst = {"loss": loss_total / len(eval_rays_loader), "psnr": psnr_total / len(eval_rays_loader)}
+    with open(scene_path + args.scene + "_rst.json", 'w') as f:
+        json.dump(eval_rst, f, indent=2)
+    f.close()
+
+    logger.info('Start Generating Video!')
     if args.render_viewing:
-        generate_video_nearby(net, ref_dataset, bound, N_samples, device, vidpath+summary_fmt+".mp4")
+        generate_video_nearby(net, eval_ref_dataset, bound, N_samples, device, eval_path)
     logger.info('Finish Generating Video!')
 
 
