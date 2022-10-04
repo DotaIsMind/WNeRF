@@ -31,15 +31,15 @@ def get_dataset(data_dir, n, device):
     rays = create_ray_batches(images, poses, train_list, H, W, focal, device)
 
     train_images = torch.tensor(images[train_list], device=device).permute(0, 3, 1, 2)
-    encoder = ImageEncoder().to(device).eval()
+    # encoder = ImageEncoder().to(device).eval()
     # with torch.no_grad():
     #     reference_feature = encoder(train_images)
-    #     # reference_feature => tensor(n, 512, 50, 50)
+        # reference_feature => tensor(n, 512, 50, 50)
 
     encoder = MWCNN().to(device).eval()
     with torch.no_grad():
         reference_feature = encoder(train_images)
-        # reference_feature => tensor(n, 128, 50, 50)
+    #     # reference_feature => tensor(n, 128, 50, 50)
 
     return RaysDataset(rays), ReferenceDataset(reference_feature, poses[train_list], focal, H)
 

@@ -15,7 +15,7 @@ parser.add_argument('-lr_decay_rate', type=float, default=0.1, help='ratio of de
 # net work
 parser.add_argument('-bs', type=int, default=2048, help='data loader batch size')
 parser.add_argument('-hidden', type=int, default=256, help='the number of hidden node of the main MLP')
-parser.add_argument('-img_fea_ch', type=int, default=256, help='the number of img feature channel by wavelet transform')
+parser.add_argument('-img_fea_ch', type=int, default=512, help='the number of img feature channel by wavelet transform')
 parser.add_argument('-mlp_layer', type=int, default=8, help='the number of mlp hidden layers')
 
 # training and eval data

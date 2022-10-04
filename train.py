@@ -60,7 +60,7 @@ def train(args):
     # create rays for batch train
     #############################
     logger.info("Process rays data for training!")
-    rays_dataset, ref_dataset = get_dataset("./data/tiny_nerf_data.npz", n_train, device)
+    rays_dataset, ref_dataset = get_dataset("./drive/MyDrive/PixelNeRF/data/tiny_nerf_data.npz", n_train, device)
 
     #############################
     # training parameters
@@ -125,16 +125,18 @@ def train(args):
                 p_bar.set_postfix({'loss': '{0:1.5f}'.format(loss.item()), 'psnr': '{0:1.5f}'.format(psnr.item())})
                 p_bar.update(1)
 
+        logger.info("Epoch:{}, loss:{}, psnr:{}:".format(e, loss.item(), psnr.item()))
         writer.add_scalar('loss/train', loss.item(), e)
         writer.add_scalar('psnr/train', psnr.item(), e)
 
-        if e+1 % args.save_ckp == 0 or e == args.epochs -1:
-            if np.isnan(loss.item()):
-                logger.warning("Save ckp but loss is nan, exit")
-                exit()
-            checkpoint(scene_path + args.scene + "_ckpt.pt", net, optimizer, e + 1)
+        # if e+1 % args.save_ckp == 0 or e == args.epochs -1:
+        #     if np.isnan(loss.item()):
+        #         logger.warning("Save ckp but loss is nan, exit")
+        #         exit()
+        #     checkpoint(scene_path + args.scene + "_ckpt.pt", net, optimizer, e + 1)
 
     logger.info('Finish Training!')
+    writer.close()
 
     logger.info('Start Generating Video!')
     net.eval()
