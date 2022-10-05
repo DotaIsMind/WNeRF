@@ -36,7 +36,7 @@ def generate_video_nearby(net, ref_dataset, bound, N_samples, device, eval_path,
     img_path = eval_path + "rgb/"
     os.makedirs(img_path, exist_ok=True)
     img_idx = 0
-    for th in tqdm(np.linspace(-1.0, 1.0, 30, endpoint=False)):
+    for th in tqdm(np.linspace(-1.0, 1.0, 120, endpoint=False)):
         theta = rot_theta(r * np.sin(np.pi * 2.0 * th) / 180.0 * np.pi)
         phi = rot_phi(r * np.cos(np.pi * 2.0 * th) / 180.0 * np.pi)
         rgb = generate_frame(net, theta @ phi @ c2w, f, img_size, bound, N_samples, device, ref_dataset)

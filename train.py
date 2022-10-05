@@ -12,6 +12,14 @@ from loguru import logger
 import time
 import json
 import os
+import skimage.metrics
+import lpips
+
+
+def get_metrics(rgb, gt):
+    ssim = skimage.metrics.structural_similarity(rgb, gt, multichannel=True, data_range=1)
+    psnr = skimage.metrics.peak_signal_noise_ratio(rgb, gt, data_range=1)
+    return psnr, ssim
 
 
 def setLearningRate(optimizer, epoch):
@@ -60,7 +68,8 @@ def train(args):
     # create rays for batch train
     #############################
     logger.info("Process rays data for training!")
-    train_rays_dataset, train_ref_dataset, eval_rays_dataset, eval_ref_dataset = get_dataset("./data/tiny_nerf_data.npz", n_train, device)
+    # train_rays_dataset, train_ref_dataset, eval_rays_dataset, eval_ref_dataset = get_dataset("./data/tiny_nerf_data.npz", n_train, device)
+    train_rays_dataset, train_ref_dataset = get_dataset("./data/tiny_nerf_data.npz", n_train, device)
 
     #############################
     # training parameters
@@ -69,7 +78,7 @@ def train(args):
     N_samples = (64, None)
 
     train_rays_loader = DataLoader(train_rays_dataset, batch_size=args.bs, drop_last=True, shuffle=True)
-    eval_rays_loader = DataLoader(eval_rays_dataset, batch_size=args.bs, drop_last=True, shuffle=True)
+    # eval_rays_loader = DataLoader(eval_rays_dataset, batch_size=args.bs, drop_last=True, shuffle=True)
     logger.info("Batch size of rays: {}, epoch: {}, img feature channel: {}, lr: {}, lr decay rate: {}".format(
         args.bs, args.epochs, args.img_fea_ch, args.lr, args.lr_decay_rate))
 
@@ -134,28 +143,37 @@ def train(args):
     # -- Eval --
     logger.info('Start Eval!')
     net.eval()
-    loss_total = 0
-    psnr_total = 0
-    # todo: psnr, ssim, lpips = eval(eval_rays_loader, eval_ref_dataset, bound, N_sample, device, path, args_render_viewing)
-    torch.cuda.empty_cache()
-    with torch.no_grad():
-        for eval_rays in eval_rays_loader:
-            assert eval_rays.shape == (args.bs, 9)
-            # chunk 在给定维度上将Tensor分块
-            rays_o, rays_d, target_rgb = torch.chunk(eval_rays, 3, dim=-1)
-            rays_od = (rays_o, rays_d)
-            rgb, _, __ = render_rays(net, rays_od, bound=bound, N_samples=N_samples, device=device, ref=eval_ref_dataset)
-            loss_total += mse(rgb, target_rgb).item()
-            psnr_total += mse2psnr(loss).item()
-
-    eval_rst = {"loss": loss_total / len(eval_rays_loader), "psnr": psnr_total / len(eval_rays_loader)}
-    with open(scene_path + args.scene + "_rst.json", 'w') as f:
-        json.dump(eval_rst, f, indent=2)
-    f.close()
+    # ssim_total = 0.0
+    # psnr_total = 0.0
+    # # lpips_vgg = lpips.LPIPS(net="vgg").to(device=device)
+    # # lpips_list = []
+    # # todo: psnr, ssim, lpips = eval(eval_rays_loader, eval_ref_dataset, bound, N_sample, device, path, args_render_viewing)
+    # torch.cuda.empty_cache()
+    # with torch.no_grad():
+    #     for train_rays in train_rays_loader:
+    #         assert train_rays.shape == (args.bs, 9)
+    #         # chunk 在给定维度上将Tensor分块
+    #         rays_o, rays_d, target_rgb = torch.chunk(train_rays, 3, dim=-1)
+    #         rays_od = (rays_o, rays_d)
+    #         rgb, _, __ = render_rays(net, rays_od, bound=bound, N_samples=N_samples, device=device, ref=train_ref_dataset)
+    #         # lpips_i = lpips_vgg(rgb, target_rgb)
+    #         # lpips_list.append(lpips_i)
+    #
+    #         psnr, ssim = get_metrics(rgb.detach().cpu().numpy() / 255.0, target_rgb.detach().cpu().numpy() / 255.0)
+    #         ssim_total += ssim
+    #         psnr_total += psnr
+    #     # lpips_all = torch.cat(lpips_list)
+    # # lpips_mean = lpips_all.mean().item()
+    #
+    # # eval_rst = {"ssim": ssim_total / len(train_rays_loader), "psnr": psnr_total / len(train_rays_loader), "lipis":lpips_mean}
+    # eval_rst = {"ssim": ssim_total / len(train_rays_loader), "psnr": psnr_total / len(train_rays_loader)}
+    # with open(scene_path + args.scene + "_rst.json", 'w') as f:
+    #     json.dump(eval_rst, f, indent=2)
+    # f.close()
 
     logger.info('Start Generating Video!')
     if args.render_viewing:
-        generate_video_nearby(net, eval_ref_dataset, bound, N_samples, device, eval_path)
+        generate_video_nearby(net, train_ref_dataset, bound, N_samples, device, eval_path)
     logger.info('Finish Generating Video!')
 
 
