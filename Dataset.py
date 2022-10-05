@@ -35,16 +35,16 @@ def get_dataset(data_dir, n, device):
     # eval_rays = create_ray_batches(images, poses, eval_list, H, W, focal, device)
     # eval_images = torch.tensor(images[eval_list], device=device).permute(0, 3, 1, 2)
 
-    # encoder = ImageEncoder().to(device).eval()
-    # with torch.no_grad():
-    #     reference_feature = encoder(train_images)
-        # reference_feature => tensor(n, 512, 50, 50)
-
-    encoder = MWCNN().to(device).eval()
+    encoder = ImageEncoder().to(device).eval()
     with torch.no_grad():
         train_reference_feature = encoder(train_images)
-        # eval_reference_feature = encoder(eval_images)
-        # reference_feature => tensor(n, 128, 50, 50)
+        # reference_feature => tensor(n, 512, 50, 50)
+
+    # encoder = MWCNN().to(device).eval()
+    # with torch.no_grad():
+    #     train_reference_feature = encoder(train_images)
+    #     # eval_reference_feature = encoder(eval_images)
+    #     # reference_feature => tensor(n, 128, 50, 50)
 
     return RaysDataset(train_rays), ReferenceDataset(train_reference_feature, poses[train_list], focal, H)
            # RaysDataset(eval_rays), ReferenceDataset(eval_reference_feature, poses[eval_list], focal, H)
@@ -92,9 +92,9 @@ class RaysDataset(Dataset):
 class ReferenceDataset:
     def __init__(self, reference, c2w, f, img_size):
         self.reference = reference
-        # self.scale = (img_size / 2) / f
+        self.scale = (img_size / 2) / f
         # 因为MWCNN降采样两次
-        self.scale = (img_size / 4) / f
+        # self.scale = (img_size / 4) / f
         self.n = c2w.shape[0]
         self.R_t = torch.tensor(c2w[:, :3, :3], device=reference.device).permute(0, 2, 1)
         self.camera_pos = torch.tensor(c2w[:, :3, -1], device=reference.device)
