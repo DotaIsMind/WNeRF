@@ -20,6 +20,10 @@ def render_rays(net, rays, bound, N_samples, device, ref, noise_std=.0):
     depth_map = torch.sum(w * z_vals, -1)
     acc_map = torch.sum(w, -1)
 
+    white_bkgd = True
+    if white_bkgd:
+        rgb_map = rgb_map + (1.-acc_map[...,None])
+
     return rgb_map, depth_map, acc_map
 
 
